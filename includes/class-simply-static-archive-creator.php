@@ -247,13 +247,17 @@ class Simply_Static_Archive_Creator {
 		$directory_iterator = new RecursiveDirectoryIterator( $this->archive_dir, RecursiveDirectoryIterator::SKIP_DOTS );
 		$recursive_iterator = new RecursiveIteratorIterator( $directory_iterator, RecursiveIteratorIterator::SELF_FIRST );
 
+		S3::$useExceptions = true;
+		$s3 = new S3( $aws_access_key_id, $aws_secret_access_key, false, 's3-eu-west-1.amazonaws.com' );
+
 		foreach ( $recursive_iterator as $item ) {
-			$path = $recursive_iterator->getSubPathName();
-			//$success = $item->isDir() ? wp_mkdir_p( $path ) : copy( $item, $path );
-			echo 'PROCESSING ' . $path . "<br>\n";
-			$success = true;
-			if ( ! $success ) {
-				return new WP_Error( 'cannot_publish_to_s3', sprintf( __( "Could not publish file to S3: %s", $this->slug ), $path ) );
+			if (!$item->isDir()) {
+				$path = $recursive_iterator->getSubPathName();
+				try {
+					$s3->putObject( S3::inputFile( $item->getRealPath() ), $bucket, $path, S3::ACL_PUBLIC_READ );
+				} catch (any $err) {
+					return new WP_Error( 'cannot_publish_to_s3', sprintf( __( "Could not publish file to S3: %s: %s", $this->slug, $err ), $path ) );
+				}
 			}
 		}
 		return true;
