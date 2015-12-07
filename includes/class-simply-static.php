@@ -11,14 +11,14 @@ class Simply_Static {
 	 *
 	 * @var string
 	 */
-	const VERSION = '1.1.2';
+	const VERSION = '2.0.0';
 
 	/**
 	 * The slug of the plugin; used in actions, filters, i18n, etc.
 	 *
 	 * @var string
 	 */
-	const SLUG = 'simply-static';
+	const SLUG = 'simply-static-s3';
 
 	/**
 	 * Singleton instance
@@ -120,7 +120,7 @@ class Simply_Static {
 				->set( 'destination_host', sist_get_origin_host() )
 				->set( 'temp_files_dir', trailingslashit( plugin_dir_path( dirname( __FILE__ ) ) . 'static-files' ) )
 				->set( 'additional_urls', '' )
-				->set( 'delivery_method', 'zip' )
+				->set( 'delivery_method', 's3' )
 				->set( 'local_dir', '' )
 				->set( 'delete_temp_files', '1' )
 				->save();
@@ -174,8 +174,8 @@ class Simply_Static {
 
 		// Add main menu item
 		add_menu_page(
-			__( 'Simply Static Settings', self::SLUG ),
-			__( 'Simply Static', self::SLUG ),
+			__( 'Simply Static S3 Settings', self::SLUG ),
+			__( 'Simply Static S3', self::SLUG ),
 			'manage_options',
 			self::SLUG,
 			array( self::$instance, 'display_generate_page' ),
@@ -193,7 +193,7 @@ class Simply_Static {
 
 		add_submenu_page(
 			self::SLUG,
-			__( 'Simply Static Settings', self::SLUG ),
+			__( 'Simply Static S3 Settings', self::SLUG ),
 			__( 'Settings', self::SLUG ),
 			'manage_options',
 			self::SLUG . '-options',
@@ -247,6 +247,20 @@ class Simply_Static {
 					$this->view->add_flash( 'updated', $message );
 				}
 
+			} elseif ( $this->options->get( 'delivery_method' ) == 's3' ) {
+				$bucket = $this->options->get( 'aws_s3_bucket' );
+				$result = $archive_creator->publish_to_s3(
+					$bucket,
+					$this->options->get( 'aws_access_key_id' ),
+					$this->options->get( 'aws_secret_access_key' )
+				);
+				if ( is_wp_error( $result ) ) {
+					$error = $result->get_error_message();
+					$this->view->add_flash( 'error', $error );
+				} else {
+					$message = __( 'Site published to S3 bucket: ' . $bucket, self::SLUG );
+					$this->view->add_flash( 'updated', $message );
+				}
 			}
 
 			if ( $this->options->get( 'delete_temp_files' ) == '1' ) {
@@ -288,6 +302,9 @@ class Simply_Static {
 			->assign( 'delivery_method', $this->options->get( 'delivery_method' ) )
 			->assign( 'local_dir', $this->options->get( 'local_dir' ) )
 			->assign( 'delete_temp_files', $this->options->get( 'delete_temp_files' ) )
+			->assign( 'aws_s3_bucket', $this->options->get( 'aws_s3_bucket' ) )
+			->assign( 'aws_access_key_id', $this->options->get( 'aws_access_key_id' ) )
+			->assign( 'aws_secret_access_key', $this->options->get( 'aws_secret_access_key' ) )
 			->render();
 	}
 
@@ -305,6 +322,9 @@ class Simply_Static {
 			->set( 'delivery_method', filter_input( INPUT_POST, 'delivery_method' ) )
 			->set( 'local_dir', sist_trailingslashit_unless_blank( filter_input( INPUT_POST, 'local_dir' ) ) )
 			->set( 'delete_temp_files', filter_input( INPUT_POST, 'delete_temp_files' ) )
+			->set( 'aws_s3_bucket', filter_input( INPUT_POST, 'aws_s3_bucket' ) )
+			->set( 'aws_access_key_id', filter_input( INPUT_POST, 'aws_access_key_id' ) )
+			->set( 'aws_secret_access_key', filter_input( INPUT_POST, 'aws_secret_access_key' ) )
 			->save();
 	}
 
@@ -350,6 +370,15 @@ class Simply_Static {
 
 		if ( strlen( get_option( 'permalink_structure' ) ) === 0 ) {
 			$errors['permalink_structure'][] = sprintf( __( "Your site does not have a permalink structure set. You can select one on <a href='%s'>the Permalink Settings page</a>.", self::SLUG ), admin_url( '/options-permalink.php' ) );
+		}
+
+		if ( $this->options->get( 'delivery_method' ) == 's3' ) {
+			if ( strlen( $this->options->get( 'aws_s3_bucket' ) ) == 0 ) {
+				$errors['delivery_method'][] = __( "You haven't configured an Amazon AWS bucket for S3 publishing.", self::SLUG );
+			}
+			if ( strlen( $this->options->get( 'aws_access_key_id' ) ) == 0 || strlen( $this->options->get( 'aws_secret_access_key' ) ) == 0 ) {
+				$errors['delivery_method'][] = __( "You haven't configured Amazon AWS credentials for S3 publishing.", self::SLUG );
+			}
 		}
 
 		if ( $this->options->get( 'delivery_method' ) == 'zip' ) {

@@ -239,6 +239,27 @@ class Simply_Static_Archive_Creator {
 	}
 
 	/**
+	 * Publish to AWS S3 bucket
+	 *
+	 * @return boolean|WP_Error
+	 */
+	public function publish_to_s3( $bucket, $aws_access_key_id, $aws_secret_access_key ) {
+		$directory_iterator = new RecursiveDirectoryIterator( $this->archive_dir, RecursiveDirectoryIterator::SKIP_DOTS );
+		$recursive_iterator = new RecursiveIteratorIterator( $directory_iterator, RecursiveIteratorIterator::SELF_FIRST );
+
+		foreach ( $recursive_iterator as $item ) {
+			$path = $recursive_iterator->getSubPathName();
+			//$success = $item->isDir() ? wp_mkdir_p( $path ) : copy( $item, $path );
+			echo 'PROCESSING ' . $path . "<br>\n";
+			$success = true;
+			if ( ! $success ) {
+				return new WP_Error( 'cannot_publish_to_s3', sprintf( __( "Could not publish file to S3: %s", $this->slug ), $path ) );
+			}
+		}
+		return true;
+	}
+
+	/**
 	* Copy static files to a local directory
 	*
 	* @return boolean|WP_Error
